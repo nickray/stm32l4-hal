@@ -25,6 +25,7 @@ impl RccExt for RCC {
             apb2: APB2 { _0: () },
             bdcr: BDCR { _0: () },
             csr: CSR { _0: () },
+            crrcr: CRRCR { _0: () },
             cfgr: CFGR {
                 hclk: None,
                 pclk1: None,
@@ -56,6 +57,8 @@ pub struct Rcc {
     pub bdcr: BDCR,
     /// Control/Status Register
     pub csr: CSR,
+    /// Clock recovery RC register
+    pub crrcr: CRRCR,
 }
 
 /// CSR Control/Status Register
@@ -69,6 +72,23 @@ impl CSR {
     pub(crate) fn csr(&mut self) -> &rcc::CSR {
         // NOTE(unsafe) this proxy grants exclusive access to this register
         unsafe { &(*RCC::ptr()).csr }
+    }
+}
+
+/// Clock recovery RC Register
+pub struct CRRCR {
+    _0: (),
+}
+
+impl CRRCR {
+    // TODO remove `allow`
+    #[allow(dead_code)]
+    pub(crate) fn crrcr(&mut self) -> &rcc::CRRCR {
+        // NOTE(unsafe) this proxy grants exclusive access to this register
+        unsafe { &(*RCC::ptr()).crrcr }
+    }
+    pub fn is_hsi48on(&mut self) -> bool {
+        self.crrcr().read().hsi48on().bit()
     }
 }
 
