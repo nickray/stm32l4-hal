@@ -6,8 +6,13 @@ pub trait RngExt {
 
     /// Activates the RNG
     fn activate(self, ahb2: &mut AHB2, crrcr: &mut CRRCR) -> RNG;
+    // TODO: this is not very useful
+    fn is_enabled(&self) -> bool;
 
+    // TODO: use the existing blocking/rng HAL trait
+    // https://github.com/rust-embedded/embedded-hal/blob/master/src/blocking/rng.rs
     fn has_random_data(&self) -> bool;
+    fn get_random_data(&self)-> u32;
 }
 
 
@@ -21,7 +26,16 @@ impl RngExt for RNG {
         self
     }
 
+    fn is_enabled(&self) -> bool {
+        self.cr.read().rngen().bit()
+    }
+
     fn has_random_data(&self) -> bool {
         self.sr.read().drdy().bit()
+    }
+
+    fn get_random_data(&self)-> u32 {
+        while !self.has_random_data() {}
+        self.dr.read().rndata().bits()
     }
 }
