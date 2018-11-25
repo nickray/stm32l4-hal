@@ -8,18 +8,21 @@ use crate::stm32::RNG;
 /// Extension trait to activate the RNG
 pub trait RngExt {
     /// Enables the RNG
-    fn enable(self, ahb2: &mut AHB2, clocks: &Clocks) -> Rng;
+    fn enable(self, ahb2: &mut AHB2, clocks: Clocks) -> Rng;
 }
 
 impl RngExt for RNG {
 
-    fn enable(self, ahb2: &mut AHB2, clocks: &Clocks) -> Rng {
+    fn enable(self, ahb2: &mut AHB2, clocks: Clocks) -> Rng {
         // crrcr.crrcr().modify(|_, w| w.hsi48on().set_bit()); // p. 180 in ref-manual
         // ...this is now supposed to be done in RCC configuration before freezing
         assert!(clocks.hsi48());  // hsi48 should be turned on previously
 
         ahb2.enr().modify(|_, w| w.rngen().set_bit());
-        self.cr.write(|w| w.rngen().bit(true));
+
+        // this does not work reliably with --release. why?
+        //self.cr.write(|w| w.rngen().bit(true));
+        self.cr.modify(|_, w| w.rngen().set_bit());
 
         Rng {
             rng: self
@@ -36,7 +39,7 @@ pub struct Rng {
 impl Rng {
 
     // cf. https://github.com/nrf-rs/nrf51-hal/blob/master/src/rng.rs#L31
-    fn free(self) -> RNG {
+    pub fn free(self) -> RNG {
         // maybe disable the RNG?
         // what about turning off the hsi48?
         self.rng
