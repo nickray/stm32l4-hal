@@ -476,7 +476,12 @@ pub struct PllConfig {
 /// Frozen clock frequencies
 ///
 /// The existence of this value indicates that the clock configuration can no longer be changed
-#[derive(Clone, Copy)]
+///
+/// Uhhhh... This is a super-misleading name :/
+/// IMHO it should be called ClockFrequencies, or even (since hsi48 has a fixed freq)
+/// Clock(s)Configurations
+///
+#[derive(Clone, Copy, Debug)]
 pub struct Clocks {
     hclk: Hertz,
     hsi48: bool,
