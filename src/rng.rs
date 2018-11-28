@@ -16,12 +16,19 @@ impl RngExt for RNG {
     fn enable(self, ahb2: &mut AHB2, clocks: Clocks) -> Rng {
         // crrcr.crrcr().modify(|_, w| w.hsi48on().set_bit()); // p. 180 in ref-manual
         // ...this is now supposed to be done in RCC configuration before freezing
+
         assert!(clocks.hsi48());  // hsi48 should be turned on previously
 
         ahb2.enr().modify(|_, w| w.rngen().set_bit());
+        // if we don't do this... we can be "too fast", and
+        // setting rng.cr.rngen has no effect!!
+        // NB: it's better to use rng.cr.modify.rngen anyway,
+        //     and doing so (the read) seems to introduce enough
+        //     delay anyway, so things work even in release profile
+        while !ahb2.enr().read().rngen().bit() {}
 
-        // this does not work reliably with --release. why?
-        //self.cr.write(|w| w.rngen().bit(true));
+        // ~~this does not work reliably with --release. why?~~ <-- see above!
+        // self.cr.write(|w| w.rngen().set_bit());
         self.cr.modify(|_, w| w.rngen().set_bit());
 
         Rng {

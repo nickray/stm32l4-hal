@@ -88,8 +88,11 @@ impl CRRCR {
         // NOTE(unsafe) this proxy grants exclusive access to this register
         unsafe { &(*RCC::ptr()).crrcr }
     }
-    pub fn is_hsi48on(&mut self) -> bool {
+    pub fn is_hsi48_on(&mut self) -> bool {
         self.crrcr().read().hsi48on().bit()
+    }
+    pub fn is_hsi48_ready(&mut self) -> bool {
+        self.crrcr().read().hsi48rdy().bit()
     }
 }
 
