@@ -25,7 +25,7 @@ impl RngExt for RNG {
         // NB: it's better to use rng.cr.modify.rngen anyway,
         //     and doing so (the read) seems to introduce enough
         //     delay anyway, so things work even in release profile
-        while !ahb2.enr().read().rngen().bit() {}
+        while ahb2.enr().read().rngen().bit_is_clear() {}
 
         // ~~this does not work reliably with --release. why?~~ <-- see above!
         // self.cr.write(|w| w.rngen().set_bit());
