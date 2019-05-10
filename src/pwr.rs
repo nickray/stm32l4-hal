@@ -30,6 +30,16 @@ impl PwrExt for PWR {
     }
 }
 
+impl Pwr {
+    pub fn enable_usb(&self) {
+        // TODO:
+        // - move to right spot
+        // - do we need interrupt-free
+        // - etc.
+        unsafe { (*PWR::ptr()).cr2.modify(|_, w| w.usv().set_bit()) }
+    }
+}
+
 /// CR1
 pub struct CR1 {
     _0: (),
@@ -42,6 +52,7 @@ impl CR1 {
         // NOTE(unsafe) this proxy grants exclusive access to this register
         unsafe { &(*PWR::ptr()).cr1 }
     }
+
 }
 /// CR2
 pub struct CR2 {
