@@ -106,6 +106,8 @@ impl Flash {
         }
     }
 
+    // NB: only effects system after power reset
+    // (alternatively, could set FLASH.CR.OBL_LAUNCH)
     pub fn set_rdp(&self, level: u8) {
         assert!(level <= 2);
 
@@ -128,18 +130,29 @@ impl Flash {
         self.flash.cr.modify(|_, w| w.obl_launch().set_bit());
     }
 
-    // TODO: implement set_boot_from_rom() and set_boot_from_flash()
-    // Uhhh... SVD only has n_boot1
-    /*
-    fn boot_from_rom(&self) {
-        self.flash.optr.modify(|_, w| w.n_sw_boot0().clear_bit());
+    // cf. set_rdp
+    pub fn set_boot_from_rom(&self) {
+        self.flash.optr.modify(|_, w| w.n_swboot0().clear_bit());
         self.flash.optr.modify(|_, w| w.n_boot0().clear_bit());
+        // would reset immediately
+        // self.flash.cr.modify(|_, w| w.obl_launch().set_bit());
     }
-    fn boot_from_flash(&self) {
-        self.flash.optr.modify(|_, w| w.n_sw_boot0().clear_bit());
+
+    // cf. set_rdp
+    pub fn set_boot_from_flash(&self) {
+        self.flash.optr.modify(|_, w| w.n_swboot0().clear_bit());
         self.flash.optr.modify(|_, w| w.n_boot0().set_bit());
+        // would reset immediately
+        // self.flash.cr.modify(|_, w| w.obl_launch().set_bit());
     }
-    */
+
+    pub fn get_boot_bits(&self) -> (bool, bool, bool) {
+        (
+            self.flash.optr.read().n_boot0().bit_is_set(),
+            self.flash.optr.read().n_swboot0().bit_is_set(),
+            self.flash.optr.read().n_boot1().bit_is_set(),
+        )
+    }
 }
 
 #[cfg(feature = "stm32l4x2")]

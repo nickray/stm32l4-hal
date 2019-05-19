@@ -14,3 +14,5 @@ pub use crate::pwm::PwmExt as _stm32l4_hal_PwmExt;
 
 #[cfg(feature = "extra-traits")]
 pub use crate::hal::flash::{Locking, Read, WriteErase};
+#[cfg(feature = "extra-traits")]
+pub use crate::flash::OptionBytesLocking;
