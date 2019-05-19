@@ -10,17 +10,23 @@
 
 #![no_std]
 
-#[cfg(not(any(
-    feature = "stm32l4x1",
-    feature = "stm32l4x2",
-    feature = "stm32l4x3",
-    feature = "stm32l4x4",
-    feature = "stm32l4x5",
-    feature = "stm32l4x6",
-)))]
-compile_error!("This crate requires one of the following features enabled: stm32l4x1, stm32l4x2, stm32l4x3, stm32l4x4, stm32l4x5 or stm32l4x6");
+#[cfg(not(feature = "device-selected"))]
+compile_error!("This crate requires one of the following features enabled:
+       stm32l4x1
+       stm32l4x2
+       stm32l4x3
+       stm32l4x4
+       stm32l4x5
+       stm32l4x6");
 
-pub use embedded_hal as hal;
+pub mod hal;
+
+// can we remove this? if not, super/self from hal.rs does not
+// seem to work :/
+#[cfg(feature = "extra-traits")]
+pub(crate) mod extra_traits;
+
+pub use cortex_m;
 
 pub use stm32l4;
 #[cfg(feature = "stm32l4x1")]
@@ -41,8 +47,14 @@ pub use stm32l4::stm32l4x6 as pac;
 #[cfg(feature = "rt")]
 pub use self::pac::interrupt;
 
+// TODO: get rid of these re-exports
+// pub use crate::cortex_m as core;
 pub use crate::pac as device;
 pub use crate::pac as stm32;
+
+#[cfg(feature = "device-selected")]
+pub mod prelude;
+
 
 pub mod datetime;
 #[cfg(any(
@@ -85,14 +97,6 @@ pub mod gpio;
     feature = "stm32l4x6"
 ))]
 pub mod i2c;
-#[cfg(any(
-    feature = "stm32l4x1",
-    feature = "stm32l4x2",
-    feature = "stm32l4x3",
-    feature = "stm32l4x5",
-    feature = "stm32l4x6"
-))]
-pub mod prelude;
 #[cfg(any(
     feature = "stm32l4x1",
     feature = "stm32l4x2",

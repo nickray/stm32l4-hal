@@ -4,8 +4,9 @@ use core::cmp;
 
 use cast::u32;
 use crate::stm32::{rcc, RCC};
+use crate::stm32::FLASH;
 
-use crate::flash::ACR;
+// use crate::flash::ACR;
 use crate::time::Hertz;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -335,7 +336,8 @@ impl CFGR {
     }
 
     /// Freezes the clock configuration, making it effective
-    pub fn freeze(&self, acr: &mut ACR) -> Clocks {
+    // pub fn freeze(&self, acr: &mut ACR) -> Clocks {
+    pub fn freeze(&self) -> Clocks {
 
         let pllconf = if self.pllcfg.is_none() {
             let plln = (2 * self.sysclk.unwrap_or(HSI)) / HSI;
@@ -416,7 +418,7 @@ impl CFGR {
 
         // adjust flash wait states
         unsafe {
-            acr.acr().write(|w| {
+            (&*FLASH::ptr()).acr.write(|w| {
                 w.latency().bits(if sysclk <= 24_000_000 {
                     0b000
                 } else if sysclk <= 48_000_000 {

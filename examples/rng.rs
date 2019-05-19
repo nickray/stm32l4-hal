@@ -7,10 +7,7 @@ use core::fmt;
 use cortex_m_rt::entry;
 
 use stm32l4xx_hal as hal;
-use crate::hal::stm32;
 use crate::hal::prelude::*;
-use crate::hal::delay::Delay;
-use crate::hal::serial::Serial;
 
 macro_rules! uprint {
     ($serial:expr, $($arg:tt)*) => {
@@ -30,16 +27,16 @@ macro_rules! uprintln {
 #[entry]
 fn main() -> ! {
 
-    let core = cortex_m::Peripherals::take().unwrap();
-    let device = stm32::Peripherals::take().unwrap();
+    let core = hal::cortex_m::Peripherals::take().unwrap();
+    let device = hal::pac::Peripherals::take().unwrap();
 
-    let mut flash = device.FLASH.constrain();
     let mut rcc = device.RCC.constrain();
 
     let clocks = rcc.cfgr
         .hsi48(true)  // needed for RNG
-        .sysclk(64.mhz()).pclk1(32.mhz())
-        .freeze(&mut flash.acr);
+        .sysclk(64.mhz())
+        .pclk1(32.mhz())
+        .freeze();
 
     // setup usart
     let mut gpioa = device.GPIOA.split(&mut rcc.ahb2);
@@ -47,7 +44,7 @@ fn main() -> ! {
     let rx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
 
     let baud_rate = 9_600;  // 115_200;
-    let serial = Serial::usart1(
+    let serial = hal::serial::Serial::usart1(
         device.USART1,
         (tx, rx),
         baud_rate.bps(),
@@ -57,10 +54,10 @@ fn main() -> ! {
     let (mut tx, _) = serial.split();
 
     // get a timer
-    let mut timer = Delay::new(core.SYST, clocks);
+    let mut timer = hal::delay::Delay::new(core.SYST, clocks);
 
     // setup rng
-    let mut rng = device.RNG.enable(&mut rcc.ahb2, clocks);
+    let mut rng = hal::rng::Rng::new(device.RNG, clocks);
 
     uprintln!(&mut tx, "{:?}", clocks);
 

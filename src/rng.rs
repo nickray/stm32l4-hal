@@ -1,21 +1,22 @@
 extern crate core;
 #[cfg(feature = "unproven")]
 use core::cmp;
-#[cfg(feature = "unproven")]
-use core::mem::transmute;
 
-use crate::rcc::{AHB2, Clocks};
-use crate::stm32::RNG;
+use crate::rcc::Clocks;
+use crate::device::{RCC, RNG};
 
-/// Extension trait to activate the RNG
-pub trait RngExt {
-    /// Enables the RNG
-    fn enable(self, ahb2: &mut AHB2, clocks: Clocks) -> Rng;
+/// Constrained RNG peripheral
+pub struct Rng {
+    rng: RNG,
 }
 
-impl RngExt for RNG {
+impl Rng {
 
-    fn enable(self, ahb2: &mut AHB2, clocks: Clocks) -> Rng {
+    // the new constructor approach
+    pub fn new(rng: RNG, clocks: Clocks) -> Rng {
+        // clocks is only passed to play nanny state, does this make sense?
+        // can we catch this at compile time instead of panicking?
+
         // crrcr.crrcr().modify(|_, w| w.hsi48on().set_bit()); // p. 180 in ref-manual
         // ...this is now supposed to be done in RCC configuration before freezing
 
@@ -27,25 +28,40 @@ impl RngExt for RNG {
         let hsi = clocks.hsi48();
         assert!(msi || hsi);
 
-        ahb2.enr().modify(|_, w| w.rngen().set_bit());
-        // if we don't do this... we can be "too fast", and
-        // the following setting of rng.cr.rngen has no effect!!
-        while ahb2.enr().read().rngen().bit_is_clear() {}
+        let _self = Self {
+            rng: rng
+        };
 
-        self.cr.modify(|_, w| w.rngen().set_bit());
+        _self.enable();
 
-        Rng {
-            rng: self
-        }
+        _self
     }
-}
 
-/// Constrained RNG peripheral
-pub struct Rng {
-    rng: RNG,
-}
+    fn enable(&self) {
+        // need to steal access to RCC, more precisely,
+        // RCC.AHB2ENR.RNGEN, which is morally ours
 
-impl Rng {
+        let rcc = unsafe { (&*RCC::ptr()) };
+        // RM0394, 6.2.18 mentions: "After the enable bit is set,
+        // there is a 2 clocks delay before the clock be (sic!) active."
+        // This is to prevent glitches in the peripheral clocks.
+        // TODO: does this need a critical section?
+        rcc.ahb2enr.modify(|_, w| w.rngen().set_bit());
+        while rcc.ahb2enr.read().rngen().bit_is_clear() {};
+
+        self.rng.cr.modify(|_, w| w.rngen().set_bit());
+    }
+
+    #[allow(dead_code)]
+    fn disable(&self) {
+        self.rng.cr.modify(|_, w| w.rngen().clear_bit());
+
+        let rcc = unsafe { (&*RCC::ptr()) };
+        rcc.ahb2enr.modify(|_, w| w.rngen().clear_bit());
+        // Probably this is not needed (the peripheral is off,
+        // so no need to prevent "clock glitches", see `enable`)
+        // while rcc.ahb2enr.read().rngen().bit_is_set() {};
+    }
 
     // cf. https://github.com/nrf-rs/nrf51-hal/blob/master/src/rng.rs#L31
     pub fn free(self) -> RNG {
