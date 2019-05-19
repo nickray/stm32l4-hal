@@ -7,6 +7,8 @@ use byteorder::ByteOrder;
 
 #[cfg(feature = "extra-traits")]
 use crate::hal::flash::{FlashError, FlashResult, Read, WriteErase, Locking};
+// #[cfg(feature = "extra-traits")]
+// use crate::hal::flash::{UnlockGuard, UnlockResult};
 
 // #[cfg(feature = "extra-traits")]
 // use generic_array::{ArrayLength, GenericArray};
@@ -34,6 +36,10 @@ pub const FLASH_ORIGIN: usize = 0x08000000;
 const FLASH_KEY1: u32 = 0x4567_0123;
 #[cfg(feature = "extra-traits")]
 const FLASH_KEY2: u32 = 0xCDEF_89AB;
+#[cfg(feature = "extra-traits")]
+const OPTION_BYTES_FLASH_KEY1: u32 = 0x0819_2A3B;
+#[cfg(feature = "extra-traits")]
+const OPTION_BYTES_FLASH_KEY2: u32 = 0x4C5D_6E7F;
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
 impl Locking for Flash {
@@ -57,6 +63,83 @@ impl Locking for Flash {
     fn lock(&self) {
         self.flash.cr.modify(|_, w| w.lock().set_bit());
     }
+}
+
+pub trait OptionBytesLocking {
+    fn option_bytes_are_locked(&self) -> bool;
+    fn option_bytes_unlock(&self);
+    fn option_bytes_lock(&self);
+}
+
+impl OptionBytesLocking for Flash {
+    fn option_bytes_are_locked(&self) -> bool {
+        self.flash.cr.read().optlock().bit_is_set()
+    }
+
+    /// unlocks the Flash.
+    fn option_bytes_unlock(&self) {
+        // need to make OptionBytesLocking aware of Locking tait
+        // if self.locked() {
+        //     self.unlock();
+        // }
+        if self.option_bytes_are_locked() {
+            unsafe {
+                self.flash.optkeyr.write(|w| w.optkeyr().bits(OPTION_BYTES_FLASH_KEY1));
+                self.flash.optkeyr.write(|w| w.optkeyr().bits(OPTION_BYTES_FLASH_KEY2));
+            }
+        }
+    }
+
+    /// locks the flash
+    fn option_bytes_lock(&self) {
+        self.flash.cr.modify(|_, w| w.optlock().set_bit());
+    }
+}
+
+impl Flash {
+    pub fn get_rdp(&self) -> u8 {
+        let rdp_bits = self.flash.optr.read().rdp().bits();
+        match rdp_bits {
+            0xAA => 0,
+            0xCC => 2,
+            _ => 1,
+        }
+    }
+
+    pub fn set_rdp(&self, level: u8) {
+        assert!(level <= 2);
+
+        let rdp_bits = match level {
+            0 => 0xAA,
+            2 => 0xCC,
+            _ => 0  // anything other than AA and CC
+        };
+
+        self.option_bytes_unlock();
+        unsafe { self.flash.optr.modify(|_, w| w.rdp().bits(rdp_bits)); }
+
+        // initiate writing
+        self.flash.cr.modify(|_, w| w.optstrt().set_bit());
+
+        // wait until done
+        while self.flash.sr.read().bsy().bit_is_set() {}
+
+        // optionally, reload options block (from register to internal registers)
+        self.flash.cr.modify(|_, w| w.obl_launch().set_bit());
+    }
+
+    // TODO: implement set_boot_from_rom() and set_boot_from_flash()
+    // Uhhh... SVD only has n_boot1
+    /*
+    fn boot_from_rom(&self) {
+        self.flash.optr.modify(|_, w| w.n_sw_boot0().clear_bit());
+        self.flash.optr.modify(|_, w| w.n_boot0().clear_bit());
+    }
+    fn boot_from_flash(&self) {
+        self.flash.optr.modify(|_, w| w.n_sw_boot0().clear_bit());
+        self.flash.optr.modify(|_, w| w.n_boot0().set_bit());
+    }
+    */
 }
 
 #[cfg(feature = "stm32l4x2")]
