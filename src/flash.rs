@@ -131,6 +131,14 @@ impl Flash {
     }
 
     // cf. set_rdp
+    /// DANGER ZONE!
+    // If you run this on a NUCLEO-L432KC, you will have issues
+    // using OpenOCD/GDB afterwards. Not bricked beyond repair, but annoying.
+    //
+    // The fix is to keep Nucleo in reset, run something like
+    // $ openocd.cfg -c "program something.elf verify reset exit
+    // while releasing reset button, where something.elf is a binary
+    // that fixes the boot flags
     pub fn set_boot_from_rom(&self) {
         self.flash.optr.modify(|_, w| w.n_swboot0().clear_bit());
         self.flash.optr.modify(|_, w| w.n_boot0().clear_bit());
@@ -152,6 +160,9 @@ impl Flash {
             self.flash.optr.read().n_swboot0().bit_is_set(),
             self.flash.optr.read().n_boot1().bit_is_set(),
         )
+    }
+    pub fn get_optr(&self) -> u32 {
+        self.flash.optr.read().bits()
     }
 }
 
