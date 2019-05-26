@@ -1,4 +1,4 @@
-// use generic_array::{ArrayLength, GenericArray};
+use generic_array::{ArrayLength, GenericArray};
 
 // TODOS:
 // - resurrect read/write-native with GenericArray values
@@ -18,7 +18,32 @@
 pub struct Locked;
 pub struct Unlocked;
 
-// Is there any point in `pub trait XXX where Self: Sized`?
+pub trait Read<ReadSize: ArrayLength<u8>> {
+    /// for HALs to implement
+    /// e.g. if FLASH can be read in as double 32 bit words (blocks of 8 bytes):
+    ///
+    ///     impl Read<generic_array::typenum::U8> for Flash {
+    ///         fn read_native(...);
+    ///     }
+    ///
+    fn read_native(&self, address: usize, array: &mut GenericArray<u8, ReadSize>);
+
+    /// read a buffer of bytes from memory
+    /// checks that the address and buffer size are multiples of native
+    /// FLASH ReadSize.
+    fn read(&self, address: usize, buf: &mut [u8]) {
+        // TODO: offer a version without restrictions?
+        // can round down address, round up buffer length,
+        // but where to get the buffer from?
+        assert!(buf.len() % ReadSize::to_usize() == 0);
+        assert!(address % ReadSize::to_usize() == 0);
+
+        for i in (0..buf.len()).step_by(8) {
+            self.read_native(address + i, GenericArray::from_mut_slice(&mut buf[i..i + 8]));
+        }
+    }
+
+}
 
 // pub type UnlockResult<'a, FlashT> = Result<UnlockGuard<'a, FlashT>, FlashError>;
 
@@ -56,18 +81,6 @@ pub trait Locking where Self: Sized {
         }
         UnlockGuard { flash: self, should_lock: locked }
     }
-}
-
-// pub trait Read<N: ArrayLength<u8>> {
-pub trait Read {
-    // - only useful if `.read()` can be generically implemented
-    //   with zero cost in terms of `.read_native()
-    // fn read_native(&self, address: usize, buf: &mut GenericArray<u8, N>);
-
-    // - is it useful to let `.read()` use non-aligned/multiple addresses
-    //   and sizes? can always round down address and round up size
-    //   and then return the appropriate slice
-    fn read(&self, address: usize, buf: &mut [u8]);
 }
 
 /// High-level API for the Flash memory
@@ -109,4 +122,4 @@ pub enum FlashError {
 /// A type alias for the result of a Flash operation.
 pub type FlashResult = Result<(), FlashError>;
 
-pub trait FlashOps: Locking + WriteErase + Read {}
+// pub trait FlashOps: Locking + WriteErase + Read {}

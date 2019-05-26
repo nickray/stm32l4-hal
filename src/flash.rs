@@ -10,8 +10,8 @@ use crate::hal::flash::{FlashError, FlashResult, Read, WriteErase, Locking};
 // #[cfg(feature = "extra-traits")]
 // use crate::hal::flash::{UnlockGuard, UnlockResult};
 
-// #[cfg(feature = "extra-traits")]
-// use generic_array::{ArrayLength, GenericArray};
+#[cfg(feature = "extra-traits")]
+use generic_array::{ArrayLength, GenericArray};
 
 #[allow(dead_code)]
 pub struct Flash {
@@ -177,7 +177,10 @@ pub const PAGE_SIZE: usize = 2048;
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
 impl Flash {
-    //fn read_part(&self, address: usize, array: &mut GenericArray<u8, generic_array::typenum::U8>) {
+    // fn read_native(&self, address: usize) -> GenericArray<u8, generic_array::typenum::U8> {
+    //pub fn read_native(&self, address: usize, buf: &mut [u8; 8]) {
+    //    // let mut buf = [0u8; 8];
+
     //    unsafe {
     //        byteorder::NativeEndian::write_u32(
     //            &mut buf[..4],
@@ -192,25 +195,6 @@ impl Flash {
     //    //buf.into()
     //    // buf
     //}
-
-    // fn read_native(&self, address: usize) -> GenericArray<u8, generic_array::typenum::U8> {
-    pub fn read_native(&self, address: usize, buf: &mut [u8; 8]) {
-        // let mut buf = [0u8; 8];
-
-        unsafe {
-            byteorder::NativeEndian::write_u32(
-                &mut buf[..4],
-                core::ptr::read_volatile(address as *mut u32),
-            );
-            byteorder::NativeEndian::write_u32(
-                &mut buf[4..],
-                core::ptr::read_volatile((address + 4) as *mut u32),
-            );
-        }
-
-        //buf.into()
-        // buf
-    }
 
     // FLASH only allows writing/reading double words (8 bytes) at a time
     // fn write_native(&self, address: usize,
@@ -255,24 +239,20 @@ impl Flash {
 }
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
-// impl Read<generic_array::typenum::U8> for Flash {
-impl Read for Flash {
-    // TODO: move this in trait definition itself?
-    fn read(&self, address: usize, buf: &mut [u8]) {
-        // let's hope this is optimized away in release builds
-        assert!(buf.len() % 8 == 0);
-        assert!(address % 8 == 0);
-
+// impl Read for Flash {
+impl Read<generic_array::typenum::U8> for Flash {
+    fn read_native(&self, address: usize, array: &mut GenericArray<u8, generic_array::typenum::U8>) {
         unsafe {
-            for i in (0..buf.len()).step_by(4) {
-                byteorder::NativeEndian::write_u32(
-                    &mut buf[i..i + 4],
-                    core::ptr::read_volatile((address + i) as *mut u32),
-                );
-            }
+            byteorder::NativeEndian::write_u32(
+                &mut array.as_mut_slice()[..4],
+                core::ptr::read_volatile(address as *mut u32),
+            );
+            byteorder::NativeEndian::write_u32(
+                &mut array.as_mut_slice()[4..],
+                core::ptr::read_volatile((address + 4) as *mut u32),
+            );
         }
     }
-
 }
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
