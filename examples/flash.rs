@@ -10,7 +10,7 @@ use stm32l4xx_hal::{prelude::*, stm32};
 use stm32l4xx_hal as hal;
 
 use cortex_m_semihosting::hprintln;
-use byteorder::ByteOrder;
+// use byteorder::ByteOrder;
 
 #[entry]
 fn main() -> ! {
@@ -32,24 +32,19 @@ fn main() -> ! {
 
     let page = 100usize;
     flash
-        .erase_page(page as u8);
-        // .expect("could not erase page {}", page);
+        .erase_page(page as u8)
+        .expect("could not erase page");
 
     let faddr = 0x800_0000 + page*2048;
-    let (word1, word2) = (1u32, 2u32);
+    let test_data = [1u8, 2, 3, 4, 0xA, 0xB, 0xC, 0xD];
     flash
-        .write_native(faddr, word1, word2);
-        // .expect("could not write to flash address {}", faddr);
+        .write_native(faddr, &test_data)
+        .expect("could not write to flash address");
 
-    let buf = flash.read_native(faddr);
-    let read = (
-        byteorder::NativeEndian::read_u32(&buf[..4]),
-        byteorder::NativeEndian::read_u32(&buf[4..]),
-    );
-    assert_eq!(
-        (word1, word2), read
-    );
-    hprintln!("success: wrote {:?}, read {:?}", (word1, word2), read).unwrap();
+    let mut buf = [0u8; 8];
+    flash.read_native(faddr, &mut buf);
+    assert_eq!(test_data, buf);
+    hprintln!("success: wrote {:?}, read {:?}", test_data, buf).unwrap();
 
     loop {}
 }

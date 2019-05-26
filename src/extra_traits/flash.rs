@@ -108,3 +108,5 @@ pub enum FlashError {
 
 /// A type alias for the result of a Flash operation.
 pub type FlashResult = Result<(), FlashError>;
+
+pub trait FlashOps: Locking + WriteErase + Read {}
