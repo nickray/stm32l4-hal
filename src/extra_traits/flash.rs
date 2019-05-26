@@ -1,8 +1,6 @@
 use generic_array::{ArrayLength, GenericArray};
 
 // TODOS:
-// - resurrect read/write-native with GenericArray values
-//   so read/write (general) can be implemented generically
 // - introduce Locked/Unlocked states so that `.unlock()`
 //   returns an Unlocked type on which write/erase can be called,
 //   whereas the Locked type lacks thes methods
@@ -18,6 +16,19 @@ use generic_array::{ArrayLength, GenericArray};
 pub struct Locked;
 pub struct Unlocked;
 
+// TODO: The idea is that `Flash::new()` returns a `Locked` `flash`
+// that implements `Read` and `Unlock` traits.
+// Then `flash.unlock()` returns an `Unlocked` flash, which implements
+// `Read`, `WriteErase` and `Lock` traits.
+// Calling `flash.lock()` reverts the `flash` to its previous state.
+//
+// Need to make sure the original flash instances is actually locked,
+// so the state machine does not start out of whack with reality.
+pub enum FlashStates {
+    Locked,
+    Unlocked,
+}
+
 pub trait Read<ReadSize: ArrayLength<u8>> {
     /// for HALs to implement
     /// e.g. if FLASH can be read in as double 32 bit words (blocks of 8 bytes):
@@ -26,6 +37,7 @@ pub trait Read<ReadSize: ArrayLength<u8>> {
     ///         fn read_native(...);
     ///     }
     ///
+    /// TODO: can we typecheck/typehint whether `address` must be aligned?
     fn read_native(&self, address: usize, array: &mut GenericArray<u8, ReadSize>);
 
     /// read a buffer of bytes from memory
@@ -42,8 +54,39 @@ pub trait Read<ReadSize: ArrayLength<u8>> {
             self.read_native(address + i, GenericArray::from_mut_slice(&mut buf[i..i + 8]));
         }
     }
-
 }
+
+pub trait WriteErase<EraseSize: ArrayLength<u8>, WriteSize: ArrayLength<u8>> {
+
+    /// check flash status
+    fn status(&self) -> FlashResult;
+
+    /// Erase specified flash page.
+    fn erase_page(&self, page: u8) -> FlashResult;
+
+    /// The smallest possible write, depends on platform
+    /// TODO: can we typecheck/typehint whether `address` must be aligned?
+    fn write_native(&self, address: usize, array: &GenericArray<u8, WriteSize>) -> FlashResult;
+
+    fn write(&self, address: usize, data: &[u8]) -> FlashResult {
+        assert!(data.len() % WriteSize::to_usize() == 0);
+        assert!(address % WriteSize::to_usize() == 0);
+
+        for i in (0..data.len()).step_by(8) {
+            self.write_native(address + i, GenericArray::from_slice(&data[i..i + 8]))?;
+        }
+
+        Ok(())
+    }
+
+    // probably not so useful, as only applicable after mass erase
+    // /// Faster programming
+    // fn program_sixtyfour_bytes(&self, address: usize, data: [u8; 64]) -> FlashResult {
+
+    /// Erase all Flash pages
+    fn erase_all_pages(&self) -> FlashResult;
+}
+
 
 // pub type UnlockResult<'a, FlashT> = Result<UnlockGuard<'a, FlashT>, FlashError>;
 
@@ -81,29 +124,6 @@ pub trait Locking where Self: Sized {
         }
         UnlockGuard { flash: self, should_lock: locked }
     }
-}
-
-/// High-level API for the Flash memory
-// pub trait WriteErase<N: ArrayLength<u8>> {
-pub trait WriteErase {
-
-    /// check flash status
-    fn status(&self) -> FlashResult;
-
-    /// Erase specified flash page.
-    fn erase_page(&self, page: u8) -> FlashResult;
-
-    // /// The smallest possible read, depends on platform
-    // fn write_native(&self, address: usize, data: &mut GenericArray<u8, N>) -> FlashResult;
-
-    fn write(&self, address: usize, data: &[u8]) -> FlashResult;
-
-    // probably not so useful, as only applicable after mass erase
-    // /// Faster programming
-    // fn program_sixtyfour_bytes(&self, address: usize, data: [u8; 64]) -> FlashResult {
-
-    /// Erase all Flash pages
-    fn erase_all_pages(&self) -> FlashResult;
 }
 
 /// Flash operation error

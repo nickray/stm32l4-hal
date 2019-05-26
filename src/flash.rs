@@ -177,70 +177,12 @@ pub const PAGE_SIZE: usize = 2048;
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
 impl Flash {
-    // fn read_native(&self, address: usize) -> GenericArray<u8, generic_array::typenum::U8> {
-    //pub fn read_native(&self, address: usize, buf: &mut [u8; 8]) {
-    //    // let mut buf = [0u8; 8];
-
-    //    unsafe {
-    //        byteorder::NativeEndian::write_u32(
-    //            &mut buf[..4],
-    //            core::ptr::read_volatile(address as *mut u32),
-    //        );
-    //        byteorder::NativeEndian::write_u32(
-    //            &mut buf[4..],
-    //            core::ptr::read_volatile((address + 4) as *mut u32),
-    //        );
-    //    }
-
-    //    //buf.into()
-    //    // buf
-    //}
-
-    // FLASH only allows writing/reading double words (8 bytes) at a time
-    // fn write_native(&self, address: usize,
-    //                 data: &mut GenericArray<u8, generic_array::typenum::U8>) -> FlashResult {
-    pub fn write_native(&self, address: usize,
-                        buf: &[u8]) -> FlashResult {
-                    // first_word: u32, second_word: u32) -> FlashResult {
-        assert_eq!(buf.len(), 8);
-        self.status()?;
-
-        // enable programming
-        self.flash.cr.modify(|_, w| w.pg().set_bit());
-
-        // write words consecutively
-        unsafe {
-            // Program the first word
-            core::ptr::write_volatile(
-                address as *mut u32,
-                byteorder::NativeEndian::read_u32(&buf[..4])
-            );
-                // first_word);
-            // Program the second word
-            // core::ptr::write_volatile((address + 4) as *mut u32, second_word);
-            core::ptr::write_volatile(
-                (address + 4) as *mut u32,
-                byteorder::NativeEndian::read_u32(&buf[4..])
-            );
-        }
-
-        // wait until done
-        while self.flash.sr.read().bsy().bit_is_set() {}
-
-        // disable programming
-        self.flash.cr.modify(|_, w| w.pg().clear_bit());
-
-        match self.flash.sr.read().bits() {
-            0 => Ok(()),
-            _ => Err(FlashError::ProgrammingError),
-        }
-    }
-
 }
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
 // impl Read for Flash {
 impl Read<generic_array::typenum::U8> for Flash {
+    // flash read is two consecutive u32 words, aligned
     fn read_native(&self, address: usize, array: &mut GenericArray<u8, generic_array::typenum::U8>) {
         unsafe {
             byteorder::NativeEndian::write_u32(
@@ -256,7 +198,7 @@ impl Read<generic_array::typenum::U8> for Flash {
 }
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
-impl WriteErase for Flash {
+impl WriteErase<generic_array::typenum::U2048, generic_array::typenum::U8> for Flash {
     fn status(&self) -> FlashResult {
         let sr = self.flash.sr.read();
         if sr.bsy().bit_is_set() {
@@ -270,6 +212,40 @@ impl WriteErase for Flash {
         }
     }
 
+    fn write_native(&self, address: usize,
+                    array: &GenericArray<u8, generic_array::typenum::U8>) -> FlashResult {
+        self.status()?;
+
+        // enable programming
+        self.flash.cr.modify(|_, w| w.pg().set_bit());
+
+        // write words consecutively
+        unsafe {
+            // Program the first word
+            core::ptr::write_volatile(
+                address as *mut u32,
+                byteorder::NativeEndian::read_u32(&array.as_slice()[..4])
+            );
+            // Program the second word
+            core::ptr::write_volatile(
+                (address + 4) as *mut u32,
+                byteorder::NativeEndian::read_u32(&array.as_slice()[4..])
+            );
+        }
+
+        // wait until done
+        while self.flash.sr.read().bsy().bit_is_set() {}
+
+        // disable programming
+        self.flash.cr.modify(|_, w| w.pg().clear_bit());
+
+        match self.flash.sr.read().bits() {
+            0 => Ok(()),
+            _ => Err(FlashError::ProgrammingError),
+        }
+    }
+
+    /*
     fn write(&self, address: usize, data: &[u8]) -> FlashResult {
         // let's hope this is optimized away in release builds
         assert!(data.len() % 8 == 0);
@@ -284,6 +260,7 @@ impl WriteErase for Flash {
 
         Ok(())
     }
+    */
 
     // TODO: use critical section
     fn erase_page(&self, page: u8) -> FlashResult {
