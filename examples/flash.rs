@@ -24,37 +24,44 @@ fn main() -> ! {
     // hprintln!("clocks = {:?}", clocks).unwrap();
 
     // let's go!
-    let flash = hal::flash::Flash::new(dp.FLASH);
+    let mut flash = hal::flash::Flash::new(dp.FLASH);
+    // flash.unlock();  // not pulled in scope by prelude
 
-    // let boot_bits = flash.get_boot_bits();
-    // hprintln!("boot_bits = {:?}", boot_bits).unwrap();
+    let boot_bits = flash.get_boot_bits();
+    hprintln!("boot_bits = {:?}", boot_bits).unwrap();
 
     let mut rng = hal::rng::Rng::new(dp.RNG, clocks);
-    const TEST_SIZE: usize = 32;
+    const TEST_SIZE: usize = 63*8; // 7*72;
     let mut random_test_data = [0u8; TEST_SIZE];
     rng
         .read(&mut random_test_data)
         .expect("could not get entropy from RNG peripheral");
 
-    flash.unlock();
-
     let page = 100usize;
-    flash
-        .erase_page(page as u8)
-        .expect("could not erase page");
-
     let faddr = 0x800_0000 + page*2048;
-    // let test_data = [1u8, 2, 3, 4, 0xF, 0xB, 0xC, 0xD];
-    flash
-        // .write_native(faddr, &random_test_data)
-        .write(faddr, &random_test_data)
-        .expect("could not write to flash address");
+    {
+        let mut unlocked_flash = flash.unlocked();
+
+        unlocked_flash
+            .erase_page(page as u8)
+            .expect("could not erase page");
+
+        // let test_data = [1u8, 2, 3, 4, 0xF, 0xB, 0xC, 0xD];
+        unlocked_flash
+            // .write_native(faddr, &random_test_data)
+            .write(faddr, &random_test_data)
+            .expect("could not write to flash address");
+
+        // if UnlockGuard is not enclosed in a block like here,
+        // can also explicitly drop it to get back access to normal flash
+        // drop(unlocked_flash);
+    }
 
     let mut buf = [0u8; TEST_SIZE];
     // flash.read_native(faddr, &mut buf);
     flash.read(faddr, &mut buf);
-    assert_eq!(random_test_data, buf);
-    hprintln!("successfully wrote/read {:?}", random_test_data).unwrap();
+    assert_eq!(&random_test_data[..], &buf[..]);
+    hprintln!("successfully wrote/read {} bytes, data[..32] = {:?}", TEST_SIZE, &random_test_data[..32]).unwrap();
 
     loop {}
 }

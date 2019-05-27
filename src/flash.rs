@@ -6,12 +6,13 @@ use crate::stm32::FLASH;
 use byteorder::ByteOrder;
 
 #[cfg(feature = "extra-traits")]
-use crate::hal::flash::{FlashError, FlashResult, Read, WriteErase, Locking};
+use crate::hal::flash::{FlashError, FlashResult, Read, WriteErase, LockingImpl, Locking};
 // #[cfg(feature = "extra-traits")]
 // use crate::hal::flash::{UnlockGuard, UnlockResult};
 
 #[cfg(feature = "extra-traits")]
-use generic_array::{ArrayLength, GenericArray};
+// use generic_array::{ArrayLength, GenericArray};
+use generic_array::GenericArray;
 
 #[allow(dead_code)]
 pub struct Flash {
@@ -42,13 +43,13 @@ const OPTION_BYTES_FLASH_KEY1: u32 = 0x0819_2A3B;
 const OPTION_BYTES_FLASH_KEY2: u32 = 0x4C5D_6E7F;
 
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
-impl Locking for Flash {
+impl LockingImpl for Flash {
     fn is_locked(&self) -> bool {
         self.flash.cr.read().lock().bit_is_set()
     }
 
     /// unlocks the Flash.
-    fn unlock(&self) {
+    fn unlock(&mut self) {
         // ehh.. should check BSY here
         // peripheral stalls if it's already locked, so check
         if self.is_locked() {
@@ -60,10 +61,13 @@ impl Locking for Flash {
     }
 
     /// locks the flash
-    fn lock(&self) {
+    fn lock(&mut self) {
         self.flash.cr.modify(|_, w| w.lock().set_bit());
     }
 }
+
+#[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
+impl Locking for Flash {}
 
 pub trait OptionBytesLocking {
     fn option_bytes_are_locked(&self) -> bool;
@@ -71,6 +75,7 @@ pub trait OptionBytesLocking {
     fn option_bytes_lock(&self);
 }
 
+#[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
 impl OptionBytesLocking for Flash {
     fn option_bytes_are_locked(&self) -> bool {
         self.flash.cr.read().optlock().bit_is_set()
@@ -108,6 +113,7 @@ impl Flash {
 
     // NB: only effects system after power reset
     // (alternatively, could set FLASH.CR.OBL_LAUNCH)
+    #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
     pub fn set_rdp(&self, level: u8) {
         assert!(level <= 2);
 
@@ -173,12 +179,6 @@ pub const WRITE_SIZE: usize = 8;
 #[cfg(feature = "stm32l4x2")]
 pub const PAGE_SIZE: usize = 2048;
 
-// use itertools::Itertools;
-
-#[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
-impl Flash {
-}
-
 #[cfg(all(feature = "stm32l4x2", feature="extra-traits"))]
 // impl Read for Flash {
 impl Read<generic_array::typenum::U8> for Flash {
@@ -212,7 +212,7 @@ impl WriteErase<generic_array::typenum::U2048, generic_array::typenum::U8> for F
         }
     }
 
-    fn write_native(&self, address: usize,
+    fn write_native(&mut self, address: usize,
                     array: &GenericArray<u8, generic_array::typenum::U8>) -> FlashResult {
         self.status()?;
 
@@ -245,25 +245,8 @@ impl WriteErase<generic_array::typenum::U2048, generic_array::typenum::U8> for F
         }
     }
 
-    /*
-    fn write(&self, address: usize, data: &[u8]) -> FlashResult {
-        // let's hope this is optimized away in release builds
-        assert!(data.len() % 8 == 0);
-        assert!(address % 8 == 0);
-
-        for i in (0..data.len()).step_by(8) {
-            // let first_word = byteorder::NativeEndian::read_u32(&data[i..i + 4]);
-            // let second_word = byteorder::NativeEndian::read_u32(&data[i + 4..i + 8]);
-            // self.write_native(address + i, first_word, second_word)?;
-            self.write_native(address + i, &data[i..i + 8])?;
-        }
-
-        Ok(())
-    }
-    */
-
-    // TODO: use critical section
-    fn erase_page(&self, page: u8) -> FlashResult {
+    // TODO: use critical section?
+    fn erase_page(&mut self, page: u8) -> FlashResult {
         self.status()?;
 
         // enable page erase
@@ -280,7 +263,7 @@ impl WriteErase<generic_array::typenum::U2048, generic_array::typenum::U8> for F
         Ok(())
     }
 
-    fn erase_all_pages(&self) -> FlashResult {
+    fn erase_all_pages(&mut self) -> FlashResult {
         self.status()?;
 
         // enable mass erase
